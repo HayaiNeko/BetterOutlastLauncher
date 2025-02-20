@@ -8,7 +8,7 @@
 #include <string>
 #include <format>
 
-#ifdef IS_OLML
+#if defined(IS_OLML)
   #define OLML_API __declspec(dllexport)
 #else
   #define OLML_API __declspec(dllimport)
@@ -43,6 +43,14 @@
 #define STDCALL_CONV  WIN32_ARGS(__stdcall)
 #define CDECL_CONV    WIN32_ARGS(__cdecl)
 
+// Internal macros used for pads
+#define CONCAT(a, b) a##b
+#define PAD_NAME(n) CONCAT(pad, n)
+
+// Use PAD and PAD_BIT to align fields in structs
+#define PAD(size) uint8_t PAD_NAME(__COUNTER__)[size]
+#define PAD_BIT(size) uint32_t PAD_NAME(__COUNTER__) : (size)
+
 // OutlastMod is the base class of every mod
 // Your mod class has to implement these functions in order to be loaded by the mod loader
 class OutlastMod {
@@ -53,7 +61,7 @@ public:
   virtual void Init() = 0;
 };
 
-// Logging utilities
+// Utilities
 // The log level will be displayed before the message in the log file
 enum class LogLevel : uint8_t {
   kInfo,
@@ -65,28 +73,24 @@ enum class LogLevel : uint8_t {
 class Logger {
 public:
   template <typename... FormatArgs>
-  void Info(const std::string& message, FormatArgs&&... args) {
+  static void Info(const std::string& message, FormatArgs&&... args) {
     Log(std::vformat(message, std::make_format_args(args...)), LogLevel::kInfo);
   }
 
   template <typename... FormatArgs>
-  void Warning(const std::string& message, FormatArgs&&... args) {
+  static void Warning(const std::string& message, FormatArgs&&... args) {
     Log(std::vformat(message, std::make_format_args(args...)), LogLevel::kWarning);
   }
 
   template <typename... FormatArgs>
-  void Error(const std::string& message, FormatArgs&&... args) {
+  static void Error(const std::string& message, FormatArgs&&... args) {
     Log(std::vformat(message, std::make_format_args(args...)), LogLevel::kError);
   }
 
-  // Use this function to get a Logger through which you can write messages
-  OLML_API static Logger* GetInstance();
-
 private:
-  OLML_API void Log(const std::string& message, LogLevel level);
+  OLML_API static void Log(const std::string& message, LogLevel level);
 };
 
-// Hooking utilities
 // Internal class for creating hooks, you can use this if you don't want to manage your hooks using the template class below
 class HookImpl {
 public:
@@ -98,16 +102,21 @@ public:
 template <typename TrampolineType = void*>
 class Hook {
 public:
-  // Use this function to create the hook
+  // Installs the hook
   template <typename TargetType, typename DetourType>
   void Install(TargetType target, DetourType detour) {
     HookImpl::CreateHook((void*)target, (void*)detour, &trampoline_);
   }
 
-  // Use this function to get the trampoline
+  // Returns the trampoline used to call the original function
   template <typename CastedType = TrampolineType>
   CastedType GetTrampoline() const { return (CastedType)trampoline_; }
 
 private:
   void* trampoline_ = nullptr;
 };
+
+namespace mem {
+  // Converts a relative address into an absolute address
+  OLML_API uintptr_t RvaToVa(ptrdiff_t rva);
+}
